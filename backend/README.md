@@ -26,6 +26,12 @@ Copia `.env.example` a `.env` y configura:
 
 ## Endpoints principales
 
+- `GET/POST /api/users` — listar y crear empleados (solo manager)
+- `GET/PUT /api/users/{id}` — detalle y edición
+- `PATCH /api/users/{id}/activate` — activar/desactivar
+- `GET/POST /api/tasks` — listar y crear tareas (manager)
+- `GET /api/tasks/me` — tareas del empleado
+- `PATCH /api/tasks/{id}/status` — cambiar estado (empleado)
 - `POST /api/auth/login` — `{ "username", "password" }`
 - `GET /api/auth/me`
 - `POST /api/products/analyze` — `{ "product_url", "review_count" }`

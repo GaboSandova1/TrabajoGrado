@@ -1,1 +1,1 @@
-from . import auth, products, history, tasks, notifications, dashboard
+from . import auth, products, history, tasks, users, notifications, dashboard

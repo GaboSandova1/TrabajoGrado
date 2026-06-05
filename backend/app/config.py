@@ -25,11 +25,45 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
 
+    EMAIL_HOST: Optional[str] = None
+    EMAIL_PORT: Optional[int] = None
+    EMAIL_USE_TLS: bool = True
+    EMAIL_HOST_USER: Optional[str] = None
+    EMAIL_HOST_PASSWORD: Optional[str] = None
+    DEFAULT_FROM_EMAIL: Optional[str] = None
+
+    FRONTEND_URL: str = "http://localhost:3000"
+
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    API_BASE_URL: str = "http://127.0.0.1:8000"
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def smtp_host(self) -> str:
+        return self.EMAIL_HOST or self.SMTP_HOST
+
+    @property
+    def smtp_port(self) -> int:
+        return self.EMAIL_PORT or self.SMTP_PORT
+
+    @property
+    def smtp_user(self) -> Optional[str]:
+        return self.EMAIL_HOST_USER or self.SMTP_USER or self.DEFAULT_FROM_EMAIL
+
+    @property
+    def smtp_password(self) -> Optional[str]:
+        return self.EMAIL_HOST_PASSWORD or self.SMTP_PASSWORD
+
+    @property
+    def from_email(self) -> Optional[str]:
+        return self.DEFAULT_FROM_EMAIL or self.smtp_user
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.smtp_user and self.smtp_password)
 
 
 settings = Settings()

@@ -32,12 +32,13 @@ export default function CreateUserPage() {
     firstName: '',
     lastName: '',
     Cedula: '',
+    Telefono: '',
     photo: null as File | null,
   })
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null);
 
   if (authLoading) {
     return (
@@ -64,45 +65,71 @@ export default function CreateUserPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
+
     if (name === 'Cedula') {
-      // Solo permitir dígitos positivos
-      const numericValue = value.replace(/\D/g, '')
+      const numericValue = value.replace(/\D/g, '');
+      if (numericValue.length > 9) {
+        return;
+      }
       setFormData((prev) => ({
         ...prev,
         [name]: numericValue,
-      }))
+      }));
+    } else if (name === 'Telefono') {
+      const numericValue = value.replace(/\D/g, '');
+      if (numericValue.length > 11) {
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue,
+      }));
     } else {
       setFormData((prev) => ({
         ...prev,
         [name]: value,
-      }))
+      }));
     }
-  }
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
+      if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
+        setError('Solo se permiten archivos de imagen JPEG o PNG');
+        return;
+      }
       setFormData((prev) => ({
         ...prev,
         photo: file,
-      }))
-      const reader = new FileReader()
+      }));
+      const reader = new FileReader();
       reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      setError(null)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
 
     // Validaciones básicas
-    if (!formData.username || !formData.email || !formData.email) {
-      setError('Todos los campos son requeridos')
-      return
+    if (!formData.username || !formData.email || !formData.Cedula || !formData.Telefono) {
+      setError('Todos los campos son requeridos');
+      return;
+    }
+
+    if (formData.Cedula.length !== 9) {
+      setError('La cédula de identidad debe tener 9 dígitos');
+      return;
+    }
+
+    if (formData.Telefono.length !== 11) {
+      setError('El teléfono debe tener 11 dígitos');
+      return;
     }
 
     try {
@@ -114,6 +141,7 @@ export default function CreateUserPage() {
       if (formData.lastName) data.append('last_name', formData.lastName)
       if (formData.photo) data.append('photo', formData.photo)
       if (formData.Cedula) data.append('cedula', formData.Cedula)
+      if (formData.Telefono) data.append('telefono', formData.Telefono)
 
       // Generar y agregar la contraseña aleatoria
       const randomPassword = generateRandomPassword(8)
@@ -131,26 +159,31 @@ export default function CreateUserPage() {
         }
       )
 
-        if (!response.ok) {
-          // Manejo de error
-          const errorData = await response.json()
-          setError(errorData.detail || 'Error creando usuario')
-          throw new Error(errorData.detail || 'Error creando usuario')
-        }
-
-        setSuccess(true)
-        setTimeout(() => {
-          router.push('/manager/users')
-        }, 1500)
-    } catch (err: any) {
-        setError(err.message || 'Error creando usuario')
-        console.error('Error creating user:', err)
-      } finally {
-        setLoading(false)
+      if (!response.ok) {
+        // Manejo de error
+        const errorData = await response.json()
+        setError(errorData.detail || 'Error creando usuario')
+        throw new Error(errorData.detail || 'Error creando usuario')
       }
+
+      const created = await response.json()
+      setSuccess(
+        created.email_sent
+          ? 'Usuario creado. Se enviaron las credenciales al correo del empleado.'
+          : 'Usuario creado, pero no se pudo enviar el correo. Revisa la configuración SMTP del backend.'
+      );
+      setTimeout(() => {
+        router.push('/manager/users')
+      }, 2500)
+    } 
+    catch (err: any) {
+      setError(err.message || 'Error creando usuario')
+      console.error('Error creando el usuario:', err)
+    } 
+    finally {
+      setLoading(false)
     }
-
-
+  }
 
   return (
     <div className="flex h-screen bg-background relative">
@@ -247,19 +280,49 @@ export default function CreateUserPage() {
                           className="bg-input border-border text-foreground placeholder:text-muted-foreground"
                         />
                       </div>
+
+                      <div className="space-y-2">
+                        <label htmlFor="username" className="block text-sm font-medium text-foreground">
+                          Nombre de usuario
+                        </label>
+                        <Input
+                          id="username"
+                          name="username"
+                          type="text"
+                          value={formData.username}
+                          onChange={handleInputChange}
+                          placeholder="juan.perez"
+                          className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label htmlFor="Cedula" className="block text-sm font-medium text-foreground">
+                          Cédula de identidad
+                        </label>
+                        <Input
+                          id="Cedula"
+                          name="Cedula"
+                          type="number"
+                          value={formData.Cedula}
+                          onChange={handleInputChange}
+                          placeholder="12345678"
+                          className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      <label htmlFor="username" className="block text-sm font-medium text-foreground">
-                        Nombre de usuario
+                      <label htmlFor="Telefono" className="block text-sm font-medium text-foreground">
+                        Teléfono
                       </label>
                       <Input
-                        id="username"
-                        name="username"
-                        type="text"
-                        value={formData.username}
+                        id="Telefono"
+                        name="Telefono"
+                        type="number"
+                        value={formData.Telefono}
                         onChange={handleInputChange}
-                        placeholder="juan.perez"
+                        placeholder="04240000000"
                         className="bg-input border-border text-foreground placeholder:text-muted-foreground"
                       />
                     </div>

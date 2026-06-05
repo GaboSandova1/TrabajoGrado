@@ -10,8 +10,11 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     hashed_password: str
     full_name: Optional[str] = None
+    cedula: Optional[str] = None
+    photo_url: Optional[str] = None
     role: str = Field(default="employee")
     is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
     tasks: List["Task"] = Relationship(
         back_populates="assigned_to",
@@ -37,13 +40,19 @@ class Task(SQLModel, table=True):
         back_populates="tasks",
         sa_relationship_kwargs={"foreign_keys": "[Task.assigned_to_id]"},
     )
+    created_by: Optional[User] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Task.created_by_id]"},
+    )
 
 
 class Notification(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    kind: str = Field(default="general")
+    title: str = Field(default="")
     message: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     read: bool = Field(default=False)
+    task_id: Optional[int] = Field(default=None, foreign_key="task.id")
 
     user_id: int = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="notifications")

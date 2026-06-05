@@ -22,6 +22,8 @@ interface UserOption {
   id: string
   username: string
   email: string
+  role: string; 
+  is_active: boolean; 
 }
 
 interface TaskItem {
@@ -439,7 +441,9 @@ export default function ManagerTasksPage() {
                   className="h-10 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground"
                 >
                   <option value="">Selecciona un usuario</option>
-                  {users.filter((u) => u.id !== user?.id).map((u) => (
+                  {users
+                    .filter((u) => u.role === 'employee' && u.is_active)
+                    .map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.username} ({u.email})
                     </option>
@@ -504,7 +508,9 @@ export default function ManagerTasksPage() {
                     className="h-10 w-full rounded-md border border-border bg-card px-2 text-sm text-foreground"
                   >
                     <option value="">Selecciona un usuario</option>
-                    {users.filter((u) => u.id !== user?.id).map((u) => (
+                    {users
+                      .filter((u) => u.role === 'employee' && u.is_active)
+                      .map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.username} ({u.email})
                       </option>
