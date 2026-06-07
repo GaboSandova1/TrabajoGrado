@@ -5,6 +5,7 @@ from sqlmodel import Session
 from app import auth, models
 from app.db import get_session
 from app.utils import groq, rain_forest
+from app.utils.validation import validate_amazon_url, validate_review_count
 
 router = APIRouter()
 
@@ -59,11 +60,8 @@ def analyze_product(
     session: Session = Depends(get_session),
     user: models.User = Depends(auth.get_current_active_user),
 ):
-    product_url = payload.product_url.strip()
-    if not product_url:
-        raise HTTPException(status_code=400, detail="product_url is required")
-
-    review_count = max(1, min(int(payload.review_count or 10), 50))
+    product_url = validate_amazon_url(payload.product_url)
+    review_count = validate_review_count(payload.review_count or 10)
 
     try:
         scraped = rain_forest.fetch_product_payload(product_url, review_count)
@@ -90,14 +88,12 @@ def compare_products(
     session: Session = Depends(get_session),
     user: models.User = Depends(auth.get_current_active_user),
 ):
-    url_1 = payload.product_url_1.strip()
-    url_2 = payload.product_url_2.strip()
-    if not url_1 or not url_2:
-        raise HTTPException(status_code=400, detail="product_url_1 and product_url_2 are required")
+    url_1 = validate_amazon_url(payload.product_url_1)
+    url_2 = validate_amazon_url(payload.product_url_2)
     if url_1 == url_2:
-        raise HTTPException(status_code=400, detail="URLs must be different")
+        raise HTTPException(status_code=400, detail="Las URLs deben ser diferentes.")
 
-    review_count = max(1, min(int(payload.review_count or 10), 50))
+    review_count = validate_review_count(payload.review_count or 10)
 
     try:
         product_a = rain_forest.fetch_product_payload(url_1, review_count)

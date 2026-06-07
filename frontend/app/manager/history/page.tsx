@@ -197,8 +197,8 @@ export default function ManagerHistoryPage() {
                     <TableHead className="w-24">Tipo</TableHead>
                     <TableHead className="w-48">Producto 1</TableHead>
                     <TableHead className="w-48">Producto 2</TableHead>
-                    <TableHead className="w-20">Rating 1</TableHead>
-                    <TableHead className="w-20">Rating 2</TableHead>
+                    <TableHead className="w-20">Valoración 1</TableHead>
+                    <TableHead className="w-20">Valoración 2</TableHead>
                     <TableHead className="w-20">Reseñas</TableHead>
                     <TableHead className="w-32">Empleado</TableHead>
                     <TableHead className="w-36">Correo</TableHead>
@@ -243,7 +243,7 @@ export default function ManagerHistoryPage() {
                           {typeof record.rating2 === 'number' ? record.rating2.toFixed(1) : 'N/D'}
                         </TableCell>
                         <TableCell>{record.reviewCount || '-'}</TableCell>
-                        <TableCell>{record.user?.username || 'Admin'}</TableCell>
+                        <TableCell>{record.user?.username || 'N/D'}</TableCell>
                         <TableCell className="text-muted-foreground" title={record.user?.email}>
                           <div className="max-w-36 truncate">
                             {record.user?.email || '-'}

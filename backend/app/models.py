@@ -11,6 +11,7 @@ class User(SQLModel, table=True):
     hashed_password: str
     full_name: Optional[str] = None
     cedula: Optional[str] = None
+    phone: Optional[str] = None
     photo_url: Optional[str] = None
     role: str = Field(default="employee")
     is_active: bool = Field(default=True)

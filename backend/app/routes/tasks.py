@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app import auth, models
 from app.db import get_session
 from app.serializers import parse_due_date, serialize_task
+from app.utils.validation import validate_task_description, validate_task_title
 from app.services.notifications import (
     notify_task_assigned,
     notify_task_status_changed,
@@ -77,12 +78,15 @@ def create_task(
     manager: models.User = Depends(auth.get_current_manager),
 ):
     assignee = _get_assignee(session, _parse_assigned_id(body.assigned_to))
+    title = validate_task_title(body.title)
+    description = validate_task_description(body.description)
+    due_date = parse_due_date(body.due_date, strict=bool(body.due_date))
     now = datetime.utcnow()
     task = models.Task(
-        title=body.title.strip(),
-        description=(body.description or "").strip() or None,
+        title=title,
+        description=description,
         status="pending",
-        due_date=parse_due_date(body.due_date),
+        due_date=due_date,
         assigned_to_id=assignee.id,
         created_by_id=manager.id,
         created_at=now,
@@ -109,10 +113,10 @@ def update_task(
 
     previous_assignee_id = task.assigned_to_id
     assignee = _get_assignee(session, _parse_assigned_id(body.assigned_to))
-    task.title = body.title.strip()
-    task.description = (body.description or "").strip() or None
+    task.title = validate_task_title(body.title)
+    task.description = validate_task_description(body.description)
     task.assigned_to_id = assignee.id
-    task.due_date = parse_due_date(body.due_date)
+    task.due_date = parse_due_date(body.due_date, strict=bool(body.due_date))
     task.updated_at = datetime.utcnow()
     session.add(task)
     session.commit()

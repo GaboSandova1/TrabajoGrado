@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AnalyzeLoaderFancy } from '@/components/AnalyzeLoaderFancy'
+import { parseApiError, validatePasswordReset } from '@/lib/validation'
 
 export default function ResetPasswordPage() {
   const searchParams = useSearchParams()
@@ -26,13 +27,9 @@ export default function ResetPasswordPage() {
     setError('')
     setSuccess('')
 
-    if (newPassword.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres.')
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden.')
+    const passwordError = validatePasswordReset(newPassword, confirmPassword)
+    if (passwordError) {
+      setError(passwordError)
       return
     }
 
@@ -55,10 +52,10 @@ export default function ResetPasswordPage() {
 
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(data.detail || data.message || 'No se pudo actualizar la contraseña.')
+        throw new Error(parseApiError(data))
       }
 
-      setSuccess('Tu contraseña se actualizó correctamente. Ya puedes iniciar sesión.')
+      setSuccess(data.message || 'Tu contraseña se actualizó correctamente. Ya puedes iniciar sesión.')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {

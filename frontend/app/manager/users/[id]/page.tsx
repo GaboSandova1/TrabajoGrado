@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { parseApiError, validateEditUserForm, validatePhotoFile } from '@/lib/validation'
 
 interface User {
   id: string
@@ -17,6 +18,8 @@ interface User {
   email: string
   firstName?: string
   lastName?: string
+  cedula?: string
+  phone?: string
   photo_url?: string
   is_active: boolean
   created_at: string
@@ -39,6 +42,8 @@ export default function UserDetailsPage() {
     email: '',
     firstName: '',
     lastName: '',
+    cedula: '',
+    telefono: '',
     photo: null as File | null,
   })
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
@@ -65,6 +70,8 @@ export default function UserDetailsPage() {
           email: response.email,
           firstName: response.firstName || '',
           lastName: response.lastName || '',
+          cedula: response.cedula || '',
+          telefono: response.phone || '',
           photo: null,
         })
         if (response.photo_url) {
@@ -84,6 +91,21 @@ export default function UserDetailsPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    if (name === 'cedula') {
+      const numericValue = value.replace(/\D/g, '').slice(0, 9)
+      setEditData((prev) => ({ ...prev, cedula: numericValue }))
+      return
+    }
+    if (name === 'telefono') {
+      const numericValue = value.replace(/\D/g, '').slice(0, 11)
+      setEditData((prev) => ({ ...prev, telefono: numericValue }))
+      return
+    }
+    if (name === 'firstName' || name === 'lastName') {
+      const lettersOnly = value.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ\s]/g, '')
+      setEditData((prev) => ({ ...prev, [name]: lettersOnly }))
+      return
+    }
     setEditData((prev) => ({
       ...prev,
       [name]: value,
@@ -92,17 +114,24 @@ export default function UserDetailsPage() {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setEditData((prev) => ({
-        ...prev,
-        photo: file,
-      }))
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+
+    const photoError = validatePhotoFile(file)
+    if (photoError) {
+      setError(photoError)
+      return
     }
+
+    setError(null)
+    setEditData((prev) => ({
+      ...prev,
+      photo: file,
+    }))
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleToggleActive = async () => {
@@ -131,8 +160,16 @@ export default function UserDetailsPage() {
     e.preventDefault()
     setError(null)
 
-    if (!editData.username || !editData.email) {
-      setError('Los campos de usuario y email son requeridos')
+    const formError = validateEditUserForm({
+      username: editData.username,
+      email: editData.email,
+      firstName: editData.firstName,
+      lastName: editData.lastName,
+      cedula: editData.cedula,
+      telefono: editData.telefono,
+    })
+    if (formError) {
+      setError(formError)
       return
     }
 
@@ -148,6 +185,8 @@ export default function UserDetailsPage() {
       if (editData.lastName) {
         data.append('last_name', editData.lastName)
       }
+      data.append('cedula', editData.cedula)
+      data.append('telefono', editData.telefono)
       if (editData.photo) {
         data.append('photo', editData.photo)
       }
@@ -164,7 +203,8 @@ export default function UserDetailsPage() {
       )
 
       if (!response.ok) {
-        throw new Error('Error al actualizar el usuario')
+        const data = await response.json().catch(() => ({}))
+        throw new Error(parseApiError(data))
       }
 
       const updatedUser = await response.json()
@@ -174,6 +214,8 @@ export default function UserDetailsPage() {
         email: updatedUser.email,
         firstName: updatedUser.firstName || '',
         lastName: updatedUser.lastName || '',
+        cedula: updatedUser.cedula || '',
+        telefono: updatedUser.phone || '',
         photo: null,
       })
       setIsEditing(false)
@@ -219,7 +261,7 @@ export default function UserDetailsPage() {
           <div className="text-center">
             <p className="text-muted-foreground">Usuario no encontrado</p>
             <Link href="/manager/users">
-              <Button className="mt-4 bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400">Volver a Usuarios</Button>
+              <Button className="mt-4 bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400">Volver a usuarios</Button>
             </Link>
           </div>
         </div>
@@ -237,7 +279,7 @@ export default function UserDetailsPage() {
               <Button variant="outline">Volver</Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Detalles del Usuario</h1>
+              <h1 className="text-3xl font-bold text-foreground">Detalles del usuario</h1>
               <p className="text-muted-foreground mt-1">{user.username}</p>
             </div>
           </div>
@@ -247,7 +289,7 @@ export default function UserDetailsPage() {
             <Card className="bg-card border-border lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-lg font-semibold text-foreground">
-                  {isEditing ? 'Editar Información' : 'Información del Usuario'}
+                  {isEditing ? 'Editar información' : 'Información del usuario'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -268,14 +310,14 @@ export default function UserDetailsPage() {
                     {/* Photo Upload */}
                     <div className="space-y-3">
                       <label className="block text-sm font-medium text-foreground">
-                        Foto de Perfil
+                        Foto de perfil
                       </label>
                       <div className="flex items-center gap-4">
                         <div className="relative">
                           {photoPreview ? (
                             <img
                               src={photoPreview}
-                              alt="Preview"
+                              alt="Vista previa"
                               className="h-24 w-24 rounded-lg object-cover"
                             />
                           ) : (
@@ -288,7 +330,7 @@ export default function UserDetailsPage() {
                           type="file"
                           ref={fileInputRef}
                           onChange={handlePhotoChange}
-                          accept="image/*"
+                          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
                           hidden
                         />
                         <Button
@@ -297,69 +339,100 @@ export default function UserDetailsPage() {
                           onClick={() => fileInputRef.current?.click()}
                           className='bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400'
                         >
-                          Cambiar Foto
+                          Cambiar foto
                         </Button>
                       </div>
                     </div>
 
-                    {/* Username */}
-                    <div className="space-y-2">
-                      <label htmlFor="username" className="block text-sm font-medium text-foreground">
-                        Nombre de Usuario
-                      </label>
-                      <Input
-                        id="username"
-                        name="username"
-                        type="text"
-                        value={editData.username}
-                        onChange={handleInputChange}
-                        className="bg-input border-border text-foreground"
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Username */}
+                      <div className="space-y-2">
+                        <label htmlFor="username" className="block text-sm font-medium text-foreground">
+                          Nombre de usuario
+                        </label>
+                        <Input
+                          id="username"
+                          name="username"
+                          type="text"
+                          value={editData.username}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
 
-                    {/* Email */}
-                    <div className="space-y-2">
-                      <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                        Correo Electrónico
-                      </label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={editData.email}
-                        onChange={handleInputChange}
-                        className="bg-input border-border text-foreground"
-                      />
-                    </div>
+                      {/* Email */}
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="block text-sm font-medium text-foreground">
+                          Correo electrónico
+                        </label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          value={editData.email}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
 
-                    {/* First Name */}
-                    <div className="space-y-2">
-                      <label htmlFor="firstName" className="block text-sm font-medium text-foreground">
-                        Nombre
-                      </label>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        type="text"
-                        value={editData.firstName}
-                        onChange={handleInputChange}
-                        className="bg-input border-border text-foreground"
-                      />
-                    </div>
+                      {/* First Name */}
+                      <div className="space-y-2">
+                        <label htmlFor="firstName" className="block text-sm font-medium text-foreground">
+                          Nombre
+                        </label>
+                        <Input
+                          id="firstName"
+                          name="firstName"
+                          type="text"
+                          value={editData.firstName}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
 
-                    {/* Last Name */}
-                    <div className="space-y-2">
-                      <label htmlFor="lastName" className="block text-sm font-medium text-foreground">
-                        Apellido
-                      </label>
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        type="text"
-                        value={editData.lastName}
-                        onChange={handleInputChange}
-                        className="bg-input border-border text-foreground"
-                      />
+                      {/* Last Name */}
+                      <div className="space-y-2">
+                        <label htmlFor="lastName" className="block text-sm font-medium text-foreground">
+                          Apellido
+                        </label>
+                        <Input
+                          id="lastName"
+                          name="lastName"
+                          type="text"
+                          value={editData.lastName}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label htmlFor="cedula" className="block text-sm font-medium text-foreground">
+                          Cédula de identidad
+                        </label>
+                        <Input
+                          id="cedula"
+                          name="cedula"
+                          type="text"
+                          inputMode="numeric"
+                          value={editData.cedula}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="telefono" className="block text-sm font-medium text-foreground">
+                          Teléfono
+                        </label>
+                        <Input
+                          id="telefono"
+                          name="telefono"
+                          type="text"
+                          inputMode="numeric"
+                          value={editData.telefono}
+                          onChange={handleInputChange}
+                          className="bg-input border-border text-foreground"
+                        />
+                      </div>
                     </div>
 
                     {/* Buttons */}
@@ -369,7 +442,7 @@ export default function UserDetailsPage() {
                         disabled={submitting}
                         className="bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400"
                       >
-                        {submitting ? 'Guardando...' : 'Guardar Cambios'}
+                        {submitting ? 'Guardando...' : 'Guardar cambios'}
                       </Button>
                       <Button
                         type="button"
@@ -402,25 +475,25 @@ export default function UserDetailsPage() {
                         </div>
                       )}
                       <div>
-                        <p className="text-sm text-muted-foreground">ID del Usuario</p>
+                        <p className="text-sm text-muted-foreground">ID del usuario</p>
                         <p className="text-foreground font-medium break-all">{user.id}</p>
                       </div>
                     </div>
 
-                    {/* Username */}
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nombre de Usuario</p>
-                      <p className="text-foreground font-medium">{user.username}</p>
-                    </div>
-
-                    {/* Email */}
-                    <div>
-                      <p className="text-sm text-muted-foreground">Correo Electrónico</p>
-                      <p className="text-foreground font-medium">{user.email}</p>
-                    </div>
-
                     {/* Full Name */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Username */}
+                      <div>
+                        <p className="text-sm text-muted-foreground">Nombre de usuario</p>
+                        <p className="text-foreground font-medium">{user.username}</p>
+                      </div>
+
+                      {/* Email */}
+                      <div>
+                        <p className="text-sm text-muted-foreground">Correo electrónico</p>
+                        <p className="text-foreground font-medium">{user.email}</p>
+                      </div>
+
                       <div>
                         <p className="text-sm text-muted-foreground">Nombre</p>
                         <p className="text-foreground font-medium">
@@ -435,9 +508,24 @@ export default function UserDetailsPage() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Cédula de identidad</p>
+                        <p className="text-foreground font-medium">
+                          {user.cedula || '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Teléfono</p>
+                        <p className="text-foreground font-medium">
+                          {user.phone || '—'}
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Created At */}
                     <div>
-                      <p className="text-sm text-muted-foreground">Fecha de Creación</p>
+                      <p className="text-sm text-muted-foreground">Fecha de creación</p>
                       <p className="text-foreground font-medium">
                         {new Date(user.created_at).toLocaleDateString('es-ES')}
                       </p>
@@ -450,7 +538,7 @@ export default function UserDetailsPage() {
                       onClick={() => setIsEditing(true)}
                       className="w-full bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400"
                     >
-                      Editar Información
+                      Editar información
                     </Button>
                   </div>
                 )}
@@ -466,7 +554,7 @@ export default function UserDetailsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Estado Actual</p>
+                  <p className="text-sm text-muted-foreground mb-2">Estado actual</p>
                   <span
                     className={`px-4 py-2 rounded-lg text-sm font-semibold inline-block ${
                       user.is_active
@@ -487,8 +575,8 @@ export default function UserDetailsPage() {
                   {submitting
                     ? 'Procesando...'
                     : user.is_active
-                    ? 'Desactivar Usuario'
-                    : 'Activar Usuario'}
+                    ? 'Desactivar usuario'
+                    : 'Activar usuario'}
                 </Button>
 
                 {submitting && (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { User, Lock, Mail } from 'lucide-react'
+import { parseApiError, validateEmail, validateLogin } from '@/lib/validation'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,8 +24,15 @@ export default function LoginPage() {
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    const loginError = validateLogin(username, password)
+    if (loginError) {
+      setError(loginError)
+      return
+    }
+
     try {
-      const userData = await login(username, password)
+      const userData = await login(username.trim(), password)
       if (userData?.role === 'manager') {
         router.replace('/manager/dashboard')
       } else if (userData?.role === 'employee') {
@@ -33,7 +41,7 @@ export default function LoginPage() {
         router.replace('/')
       }
     } catch (err) {
-      setError('Usuario o contraseña incorrectos')
+      setError(err instanceof Error ? err.message : 'Usuario o contraseña incorrectos')
     }
   }
 
@@ -41,18 +49,26 @@ export default function LoginPage() {
     e.preventDefault()
     setRecoverMsg('')
     setError('')
+
+    const email = emailRecover.trim().toLowerCase()
+    const emailError = validateEmail(email)
+    if (emailError) {
+      setError(emailError)
+      return
+    }
+
     setRecoverLoading(true)
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailRecover })
+        body: JSON.stringify({ email }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(data.detail || data.message || 'No se pudo enviar el correo de recuperación.')
+        throw new Error(parseApiError(data))
       }
-      setRecoverMsg('Enviamos un enlace de recuperación a su correo.')
+      setRecoverMsg(data.message || 'Enviamos un enlace de recuperación a tu correo.')
       setEmailRecover('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado.')
@@ -191,7 +207,7 @@ export default function LoginPage() {
               alt="Logo AreaMedic"
               className="w-30 h-30 mb-4 rounded-full object-contain bg-white shadow"
             />
-            <h1 className="text-3xl font-bold mb-4">¡Hola, Bienvenido!</h1>
+            <h1 className="text-3xl font-bold mb-4">¡Hola, bienvenido!</h1>
             <p className="mb-6 text-sm md:text-base">¿Olvidaste tu contraseña?</p>
             <button 
               type="button" 

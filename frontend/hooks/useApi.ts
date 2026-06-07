@@ -65,7 +65,7 @@ export function useApi() {
         const data = await response.json()
         return data
       } catch (err) {
-        const normalizedError = err instanceof Error ? err : new Error('An error occurred')
+        const normalizedError = err instanceof Error ? err : new Error('Ocurrió un error inesperado.')
         const isAbort =
           normalizedError.name === 'AbortError' ||
           normalizedError.message.toLowerCase().includes('signal is aborted')

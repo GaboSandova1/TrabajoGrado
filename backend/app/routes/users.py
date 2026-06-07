@@ -1,5 +1,3 @@
-import uuid
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -10,11 +8,16 @@ from app import auth, models
 from app.db import get_session
 from app.serializers import serialize_user
 from app.services.notifications import send_welcome_credentials
+from app.utils.uploads import save_user_photo
+from app.utils.validation import (
+    normalize_email,
+    validate_cedula,
+    validate_name,
+    validate_phone,
+    validate_username,
+)
 
 router = APIRouter()
-
-UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ActivateUserBody(BaseModel):
@@ -22,23 +25,10 @@ class ActivateUserBody(BaseModel):
 
 
 def _full_name(first_name: Optional[str], last_name: Optional[str]) -> Optional[str]:
-    parts = [part.strip() for part in (first_name or "", last_name or "") if part and part.strip()]
+    first = validate_name(first_name, "nombre")
+    last = validate_name(last_name, "apellido")
+    parts = [part for part in (first, last) if part]
     return " ".join(parts) if parts else None
-
-
-async def _save_photo(photo: Optional[UploadFile]) -> Optional[str]:
-    if not photo or not photo.filename:
-        return None
-    suffix = Path(photo.filename).suffix.lower() or ".jpg"
-    if suffix not in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
-        raise HTTPException(status_code=400, detail="Formato de imagen no soportado")
-    filename = f"{uuid.uuid4().hex}{suffix}"
-    destination = UPLOAD_DIR / filename
-    content = await photo.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="La imagen no puede superar 5 MB")
-    destination.write_bytes(content)
-    return f"/uploads/{filename}"
 
 
 def _ensure_unique(
@@ -87,25 +77,29 @@ async def create_user(
     password: str = Form(...),
     first_name: Optional[str] = Form(None),
     last_name: Optional[str] = Form(None),
-    cedula: Optional[str] = Form(None),
+    cedula: str = Form(...),
+    telefono: str = Form(...),
     photo: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session),
     _: models.User = Depends(auth.get_current_manager),
 ):
-    username = username.strip()
-    email = str(email).strip().lower()
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    username = validate_username(username)
+    email = normalize_email(str(email))
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 8 caracteres")
+    if len(password) > 128:
+        raise HTTPException(status_code=400, detail="La contraseña no puede superar 128 caracteres")
 
     _ensure_unique(session, username=username, email=email)
-    photo_url = await _save_photo(photo)
+    photo_url = await save_user_photo(photo)
 
     user = models.User(
         username=username,
         email=email,
         hashed_password=auth.get_password_hash(password),
         full_name=_full_name(first_name, last_name),
-        cedula=cedula or None,
+        cedula=validate_cedula(cedula),
+        phone=validate_phone(telefono),
         photo_url=photo_url,
         role="employee",
         is_active=True,
@@ -127,6 +121,8 @@ async def update_user(
     email: EmailStr = Form(...),
     first_name: Optional[str] = Form(None),
     last_name: Optional[str] = Form(None),
+    cedula: str = Form(...),
+    telefono: str = Form(...),
     photo: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session),
     _: models.User = Depends(auth.get_current_manager),
@@ -137,14 +133,16 @@ async def update_user(
     if user.role == "manager":
         raise HTTPException(status_code=400, detail="No se puede editar la cuenta del gerente")
 
-    username = username.strip()
-    email = str(email).strip().lower()
+    username = validate_username(username)
+    email = normalize_email(str(email))
     _ensure_unique(session, username=username, email=email, exclude_id=user.id)
 
     user.username = username
     user.email = email
     user.full_name = _full_name(first_name, last_name)
-    photo_url = await _save_photo(photo)
+    user.cedula = validate_cedula(cedula)
+    user.phone = validate_phone(telefono)
+    photo_url = await save_user_photo(photo)
     if photo_url:
         user.photo_url = photo_url
 

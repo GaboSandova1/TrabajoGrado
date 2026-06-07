@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { parseApiError, validateCreateUserForm, validatePhotoFile } from '@/lib/validation'
 
 function generateRandomPassword(length = 8) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -85,51 +86,57 @@ export default function CreateUserPage() {
         ...prev,
         [name]: numericValue,
       }));
+    } else if (name === 'firstName' || name === 'lastName') {
+      const lettersOnly = value.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ\s]/g, '')
+      setFormData((prev) => ({
+        ...prev,
+        [name]: lettersOnly,
+      }))
     } else {
       setFormData((prev) => ({
         ...prev,
         [name]: value,
-      }));
+      }))
     }
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
-        setError('Solo se permiten archivos de imagen JPEG o PNG');
-        return;
-      }
-      setFormData((prev) => ({
-        ...prev,
-        photo: file,
-      }));
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const photoError = validatePhotoFile(file)
+    if (photoError) {
+      setError(photoError)
+      return
     }
-  };
+
+    setError(null)
+    setFormData((prev) => ({
+      ...prev,
+      photo: file,
+    }))
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    // Validaciones básicas
-    if (!formData.username || !formData.email || !formData.Cedula || !formData.Telefono) {
-      setError('Todos los campos son requeridos');
-      return;
-    }
-
-    if (formData.Cedula.length !== 9) {
-      setError('La cédula de identidad debe tener 9 dígitos');
-      return;
-    }
-
-    if (formData.Telefono.length !== 11) {
-      setError('El teléfono debe tener 11 dígitos');
-      return;
+    const formError = validateCreateUserForm({
+      username: formData.username,
+      email: formData.email,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      cedula: formData.Cedula,
+      telefono: formData.Telefono,
+    })
+    if (formError) {
+      setError(formError)
+      return
     }
 
     try {
@@ -140,8 +147,8 @@ export default function CreateUserPage() {
       if (formData.firstName) data.append('first_name', formData.firstName)
       if (formData.lastName) data.append('last_name', formData.lastName)
       if (formData.photo) data.append('photo', formData.photo)
-      if (formData.Cedula) data.append('cedula', formData.Cedula)
-      if (formData.Telefono) data.append('telefono', formData.Telefono)
+      data.append('cedula', formData.Cedula)
+      data.append('telefono', formData.Telefono)
 
       // Generar y agregar la contraseña aleatoria
       const randomPassword = generateRandomPassword(8)
@@ -159,12 +166,12 @@ export default function CreateUserPage() {
         }
       )
 
-      if (!response.ok) {
-        // Manejo de error
-        const errorData = await response.json()
-        setError(errorData.detail || 'Error creando usuario')
-        throw new Error(errorData.detail || 'Error creando usuario')
-      }
+        if (!response.ok) {
+          const errorData = await response.json()
+          const message = parseApiError(errorData)
+          setError(message)
+          throw new Error(message)
+        }
 
       const created = await response.json()
       setSuccess(
@@ -219,7 +226,7 @@ export default function CreateUserPage() {
                         {photoPreview ? (
                           <img
                             src={photoPreview}
-                            alt="Preview"
+                            alt="Vista previa"
                             className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                           />
                         ) : (
@@ -233,9 +240,12 @@ export default function CreateUserPage() {
                         type="file"
                         ref={fileInputRef}
                         onChange={handlePhotoChange}
-                        accept="image/*"
+                        accept="image/jpeg,image/png,.jpg,.jpeg,.png"
                         hidden
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Formatos: JPG o PNG (máx. 5 MB)
+                      </p>
                     </div>
                   </div>
                   <form onSubmit={handleSubmit} className="space-y-6">
@@ -276,7 +286,7 @@ export default function CreateUserPage() {
                           type="text"
                           value={formData.lastName}
                           onChange={handleInputChange}
-                          placeholder="Perez"
+                          placeholder="Pérez"
                           className="bg-input border-border text-foreground placeholder:text-muted-foreground"
                         />
                       </div>

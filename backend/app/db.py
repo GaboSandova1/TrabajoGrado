@@ -8,6 +8,7 @@ engine = create_engine(settings.DATABASE_URL, echo=False)
 
 _USER_COLUMNS = {
     "cedula": "VARCHAR",
+    "phone": "VARCHAR",
     "photo_url": "VARCHAR",
     "created_at": "DATETIME",
 }

@@ -46,7 +46,7 @@ export default function UsersPage() {
         setUsers(response)
         setError(null)
       } catch (err: any) {
-        setError(err.message || 'Error cargando usuarios')
+        setError(err.message || 'Error al cargar los usuarios')
         console.error('Error fetching users:', err)
       } finally {
         setLoading(false)
@@ -172,7 +172,7 @@ export default function UsersPage() {
                                 size="sm"
                                 className="bg-linear-to-r from-amber-500 to-amber-500 text-white hover:from-amber-400 hover:to-amber-400 hover:text-white"
                               >
-                                Ver Detalles
+                                Ver detalles
                               </Button>
                             </Link>
                           </td>

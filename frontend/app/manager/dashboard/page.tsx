@@ -51,20 +51,12 @@ export default function ManagerDashboard() {
 
   const buildSeries = (response: DashboardStats) => {
     if (response.time_series && response.time_series.length > 0) {
-      setAnalysisSeries(
-        response.time_series.map((item: { date: string; count: number }) => ({
-          name: item.date,
-          value: item.count,
-        }))
-      )
-      return
+      return response.time_series.map((item) => ({
+        name: item.date,
+        value: item.count,
+      }))
     }
-    setAnalysisSeries([
-      {
-        name: 'Análisis',
-        value: response.total_products_analyzed || 0,
-      },
-    ])
+    return [{ name: 'Análisis', value: response.total_products_analyzed || 0 }]
   }
 
   useEffect(() => {
@@ -72,43 +64,24 @@ export default function ManagerDashboard() {
 
     const fetchDashboardStats = async () => {
       try {
-        setLoading(true)
+        setChartLoading(true)
+        if (!stats) setLoading(true)
         const response = await request(`/api/dashboard/stats?days=${daysRange}`)
         setStats(response)
         setFilteredProducts(response.total_products_analyzed ?? 0)
-        buildSeries(response)
+        setAnalysisSeries(buildSeries(response))
         setError(null)
       } catch (err: any) {
         setError(err.message || 'Error al cargar el panel')
         console.error('Error fetching dashboard stats:', err)
       } finally {
         setLoading(false)
-      }
-    }
-
-    fetchDashboardStats()
-  }, [authLoading, request])
-
-  useEffect(() => {
-    if (authLoading || !stats) return
-
-    const fetchChartSeries = async () => {
-      try {
-        setChartLoading(true)
-        const response = await request(`/api/dashboard/stats?days=${daysRange}`)
-        setFilteredProducts(response.total_products_analyzed ?? 0)
-        buildSeries(response)
-        setError(null)
-      } catch (err: any) {
-        setError(err.message || 'Error al cargar el panel')
-        console.error('Error fetching dashboard stats:', err)
-      } finally {
         setChartLoading(false)
       }
     }
 
-    fetchChartSeries()
-  }, [authLoading, request, daysRange])
+    fetchDashboardStats()
+  }, [authLoading, daysRange, request])
 
   if (authLoading || loading) {
     return (
@@ -136,11 +109,11 @@ export default function ManagerDashboard() {
 
   const chartData = [
     {
-      name: 'Usuarios Activos',
+      name: 'Usuarios activos',
       value: stats?.active_users || 0,
     },
     {
-      name: 'Usuarios Inactivos',
+      name: 'Usuarios inactivos',
       value: stats?.inactive_users || 0,
     },
   ]
@@ -197,7 +170,7 @@ export default function ManagerDashboard() {
             <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Productos Analizados
+                  Productos analizados
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -211,7 +184,7 @@ export default function ManagerDashboard() {
             <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total de Usuarios
+                  Total de usuarios
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -225,7 +198,7 @@ export default function ManagerDashboard() {
             <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Usuarios Activos
+                  Usuarios activos
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -239,7 +212,7 @@ export default function ManagerDashboard() {
             <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Usuarios Inactivos
+                  Usuarios inactivos
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -290,7 +263,7 @@ export default function ManagerDashboard() {
             <Card className="bg-card border-border">
               <CardHeader className="flex flex-row items-center justify-between gap-4">
                 <CardTitle className="text-lg font-semibold text-foreground">
-                  Total de Análisis
+                  Total de análisis
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Días</span>
@@ -308,8 +281,13 @@ export default function ManagerDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
+                {chartLoading && (
+                  <div className="mb-3 flex justify-center">
+                    <AnalyzeLoaderFancy />
+                  </div>
+                )}
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={barChartData}>
+                  <BarChart key={daysRange} data={barChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                     <XAxis
                       dataKey="name"

@@ -1,4 +1,3 @@
-import { Sidebar } from '@/components/Sidebar'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 export default function ManagerLayout({
@@ -9,7 +8,6 @@ export default function ManagerLayout({
   return (
     <ProtectedRoute requiredRole="manager">
       <div className="flex h-screen">
-        
         <main className="flex-1 overflow-auto">
           {children}
         </main>

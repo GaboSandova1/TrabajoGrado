@@ -22,14 +22,32 @@ def _photo_public_url(photo_url: Optional[str]) -> Optional[str]:
     return f"{base}{path}"
 
 
+def serialize_auth_user(user: models.User) -> dict:
+    first_name, last_name = _split_full_name(user.full_name)
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "firstName": first_name,
+        "lastName": last_name,
+        "profilePicture": _photo_public_url(user.photo_url),
+        "cedula": user.cedula,
+        "phone": user.phone,
+        "isActive": user.is_active,
+    }
+
+
 def serialize_user(user: models.User, *, detailed: bool = False) -> dict:
     first_name, last_name = _split_full_name(user.full_name)
     created_at = getattr(user, "created_at", None) or datetime.utcnow()
+    photo = _photo_public_url(user.photo_url)
     payload = {
         "id": str(user.id),
         "username": user.username,
         "email": user.email,
-        "photo_url": _photo_public_url(user.photo_url),
+        "photo_url": photo,
+        "profilePicture": photo,
         "is_active": user.is_active,
         "created_at": created_at.isoformat(),
         "role": user.role,
@@ -38,6 +56,7 @@ def serialize_user(user: models.User, *, detailed: bool = False) -> dict:
         payload["firstName"] = first_name
         payload["lastName"] = last_name
         payload["cedula"] = user.cedula
+        payload["phone"] = user.phone
     return payload
 
 
@@ -71,7 +90,7 @@ def serialize_task(task: models.Task, session) -> dict:
     }
 
 
-def parse_due_date(value: Optional[str]) -> Optional[datetime]:
+def parse_due_date(value: Optional[str], *, strict: bool = False) -> Optional[datetime]:
     if not value:
         return None
     if isinstance(value, datetime):
@@ -80,4 +99,8 @@ def parse_due_date(value: Optional[str]) -> Optional[datetime]:
         parsed = date.fromisoformat(str(value)[:10])
         return datetime(parsed.year, parsed.month, parsed.day)
     except ValueError:
+        if strict:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=400, detail="La fecha límite no es válida.")
         return None

@@ -92,7 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
 
       if (!response.ok) {
-        throw new Error('Login failed')
+        const errorData = await response.json().catch(() => ({}))
+        const detail = errorData.detail
+        const message =
+          typeof detail === 'string'
+            ? detail
+            : 'Usuario o contraseña incorrectos'
+        throw new Error(message)
       }
 
       const data = await response.json()

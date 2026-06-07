@@ -20,7 +20,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Copia `.env.example` a `.env` y configura:
 
-- `RAINFOREST_API_KEY`
+- `RAINFOREST_API_KEY` — clave principal
+- `RAINFOREST_API_KEY_2` y `RAINFOREST_API_KEY_3` — claves adicionales (rotación automática)
 - `GROQ_API_KEY`
 - `SECRET_KEY`
 

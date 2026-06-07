@@ -14,6 +14,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AnalyzeLoaderFancy } from '@/components/AnalyzeLoaderFancy'
+import { PrintButton } from '@/components/PrintButton'
+import { validateAmazonUrl, validateReviewCount } from '@/lib/validation'
 
 interface AnalysisResult {
   productName: string
@@ -38,8 +40,14 @@ export default function AnalyzePage() {
     setError('')
     setResult(null)
 
-    if (!productUrl.trim()) {
-      setError('Por favor ingresa una URL de producto de Amazon.')
+    const urlError = validateAmazonUrl(productUrl)
+    if (urlError) {
+      setError(urlError)
+      return
+    }
+    const reviewError = validateReviewCount(reviewCount)
+    if (reviewError) {
+      setError(reviewError)
       return
     }
 
@@ -61,7 +69,7 @@ export default function AnalyzePage() {
   return (
     <div className={`p-8 ${result ? '' : 'min-h-screen flex items-center'}`}>
       <div className="max-w-4xl mx-auto w-full">
-        <Card className="mb-8">
+        <Card className="no-print mb-8">
           <CardHeader>
             <CardTitle>Analizar producto</CardTitle>
             <CardDescription>
@@ -121,72 +129,78 @@ export default function AnalyzePage() {
         </Card>
 
         {loading && !result && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <AnalyzeLoaderFancy />
           </div>
         )}
 
         {result && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{result.productName}</CardTitle>
-              <CardDescription>
-                Análisis basado en {result.reviewCount} reseñas
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              <div className="bg-primary/10 rounded-lg p-6">
-                <p className="text-sm text-muted-foreground mb-2">Valoración general</p>
-                <p className="text-4xl font-bold text-primary">
-                  {typeof result.rating === 'number' ? result.rating.toFixed(1) : 'N/D'}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">de 5 estrellas</p>
-              </div>
+          <div className="print-area space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{result.productName}</CardTitle>
+                <CardDescription>
+                  Análisis basado en {result.reviewCount} reseñas
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div className="bg-primary/10 rounded-lg p-6">
+                  <p className="text-sm text-muted-foreground mb-2">Valoración general</p>
+                  <p className="text-4xl font-bold text-primary">
+                    {typeof result.rating === 'number' ? result.rating.toFixed(1) : 'N/D'}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">de 5 estrellas</p>
+                </div>
 
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-3">Resumen</h3>
-                <p className="text-foreground/80">{result.summary}</p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-3">Aspectos positivos</h3>
-                <ul className="space-y-2">
-                  {result.positiveAspects.map((aspect, idx) => (
-                    <li key={idx} className="flex gap-3">
-                      <span className="text-primary font-bold">+</span>
-                      <span className="text-foreground/80">{aspect}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-3">Aspectos negativos</h3>
-                <ul className="space-y-2">
-                  {result.negativeAspects.map((aspect, idx) => (
-                    <li key={idx} className="flex gap-3">
-                      <span className="text-destructive font-bold">-</span>
-                      <span className="text-foreground/80">{aspect}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {result.keyInsights.length > 0 && (
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-3">Puntos clave</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-3">Resumen</h3>
+                  <p className="text-foreground/80">{result.summary}</p>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-3">Aspectos positivos</h3>
                   <ul className="space-y-2">
-                    {result.keyInsights.map((insight, idx) => (
-                      <li key={idx} className="flex gap-3 p-3 bg-muted rounded-md">
-                        <span className="text-accent font-bold">•</span>
-                        <span className="text-foreground/80">{insight}</span>
+                    {result.positiveAspects.map((aspect, idx) => (
+                      <li key={idx} className="flex gap-3">
+                        <span className="text-primary font-bold">+</span>
+                        <span className="text-foreground/80">{aspect}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-3">Aspectos negativos</h3>
+                  <ul className="space-y-2">
+                    {result.negativeAspects.map((aspect, idx) => (
+                      <li key={idx} className="flex gap-3">
+                        <span className="text-destructive font-bold">-</span>
+                        <span className="text-foreground/80">{aspect}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {result.keyInsights.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-3">Puntos clave</h3>
+                    <ul className="space-y-2">
+                      {result.keyInsights.map((insight, idx) => (
+                        <li key={idx} className="flex gap-3 p-3 bg-muted rounded-md">
+                          <span className="text-accent font-bold">•</span>
+                          <span className="text-foreground/80">{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-center">
+              <PrintButton />
+            </div>
+          </div>
         )}
       </div>
     </div>

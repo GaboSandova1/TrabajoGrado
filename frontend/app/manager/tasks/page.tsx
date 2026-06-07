@@ -17,13 +17,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { validateTaskForm } from '@/lib/validation'
 
 interface UserOption {
   id: string
   username: string
   email: string
-  role: string; 
-  is_active: boolean; 
 }
 
 interface TaskItem {
@@ -88,7 +87,7 @@ export default function ManagerTasksPage() {
       setTasks(tasksData)
       setError(null)
     } catch (err: any) {
-      setError(err.message || 'Error cargando tareas')
+      setError(err.message || 'Error al cargar las tareas')
     } finally {
       setLoading(false)
     }
@@ -106,8 +105,9 @@ export default function ManagerTasksPage() {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreateError(null)
-    if (!title || !assignedTo) {
-      setCreateError('Título y usuario asignado son obligatorios')
+    const formError = validateTaskForm(title, assignedTo, description, dueDate)
+    if (formError) {
+      setCreateError(formError)
       return
     }
 
@@ -161,6 +161,18 @@ export default function ManagerTasksPage() {
   const handleEditTask = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editTask) return
+
+    const formError = validateTaskForm(
+      editTitle,
+      editAssignedTo,
+      editDescription,
+      editDueDate
+    )
+    if (formError) {
+      setError(formError)
+      return
+    }
+
     try {
       await request(`/api/tasks/${editTask.id}`, {
         method: 'PATCH',
@@ -420,7 +432,7 @@ export default function ManagerTasksPage() {
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ej: Analizar producto X y buscar proveedor mas barato"
+                placeholder="Ej: Analizar producto X y buscar proveedor más barato"
               />
             </div>
             <div>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AnalyzeLoaderFancy } from '@/components/AnalyzeLoaderFancy'
+import { validateEmail } from '@/lib/validation'
 
 interface ForgotPasswordModalProps {
   open: boolean
@@ -22,12 +23,20 @@ export function ForgotPasswordModal({
   const [deliveryWarning, setDeliveryWarning] = useState('')
   const { request, loading, error } = useApi()
 
+  const [localError, setLocalError] = useState('')
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLocalError('')
+    const emailError = validateEmail(email)
+    if (emailError) {
+      setLocalError(emailError)
+      return
+    }
     try {
       const data = await request('/api/auth/forgot-password', {
         method: 'POST',
-        body: { email },
+        body: { email: email.trim().toLowerCase() },
       })
       setDeliveryMode(data?.delivery === 'console' ? 'console' : 'smtp')
       setDeliveryWarning(data?.warning || '')
@@ -42,7 +51,7 @@ export function ForgotPasswordModal({
     }
   }
 
-  const displayError = error
+  const displayError = localError || error
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

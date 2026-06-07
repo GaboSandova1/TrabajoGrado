@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AnalyzeLoaderFancy } from '@/components/AnalyzeLoaderFancy'
+import { PrintButton } from '@/components/PrintButton'
+import { validateAmazonUrl } from '@/lib/validation'
 
 interface ProductComparison {
   product1: {
@@ -41,13 +43,19 @@ export default function ComparePage() {
     setError('')
     setResult(null)
 
-    if (!product1Url.trim() || !product2Url.trim()) {
-      setError('Por favor ingresa ambas URLs de productos')
+    const url1Error = validateAmazonUrl(product1Url)
+    if (url1Error) {
+      setError(`Producto 1: ${url1Error}`)
+      return
+    }
+    const url2Error = validateAmazonUrl(product2Url)
+    if (url2Error) {
+      setError(`Producto 2: ${url2Error}`)
       return
     }
 
     if (product1Url.trim() === product2Url.trim()) {
-      setError('Por favor ingresa URLs de productos diferentes')
+      setError('Las URLs deben ser de productos diferentes.')
       return
     }
 
@@ -73,14 +81,14 @@ export default function ComparePage() {
     <div className={`p-8 ${result ? '' : 'min-h-screen flex items-center'}`}>
       <div className="max-w-6xl mx-auto w-full">
         {loading && !result && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <AnalyzeLoaderFancy />
           </div>
         )}
 
-        <Card className="mb-8">
+        <Card className="no-print mb-8">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold">Comparar Productos</CardTitle>
+            <CardTitle className="text-2xl font-bold">Comparar productos</CardTitle>
             <CardDescription>
               Ingresa dos URLs de productos de Amazon para analizarlos y compararlos.
             </CardDescription>
@@ -135,8 +143,8 @@ export default function ComparePage() {
         </Card>
 
         {result && (
-          <>
-            <Card className="mb-8 border-primary bg-primary/5">
+          <div className="print-area space-y-6">
+            <Card className="border-primary bg-primary/5">
               <CardHeader>
                 <CardTitle>Nuestra recomendación</CardTitle>
               </CardHeader>
@@ -195,7 +203,11 @@ export default function ComparePage() {
                 </div>
               ))}
             </div>
-          </>
+
+            <div className="flex justify-center">
+              <PrintButton />
+            </div>
+          </div>
         )}
       </div>
     </div>

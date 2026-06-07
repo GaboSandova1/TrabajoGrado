@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useApi } from '@/hooks/useApi'
+import { useNotificationPolling } from '@/hooks/useNotificationPolling'
 import { Button } from '@/components/ui/button'
 import { ThemeToggleFancy } from '@/components/ThemeToggleFancy'
 import { cn } from '@/lib/utils'
@@ -13,12 +13,7 @@ import { LayoutDashboard, Users, Calendar, Folder, BarChart2, LogOut, Search, Li
 
 export function Sidebar() {
   const { user, logout } = useAuth()
-  const { request } = useApi()
-  const { theme, setTheme } = useTheme()
-  const pathname = usePathname()
-  const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const { unreadCount } = useNotificationPolling(!!user)
 
   // TRUCO: Guardar las coordenadas exactas donde el usuario hace clic
   const lastClick = useRef({ x: 0, y: 0 })
@@ -33,29 +28,10 @@ export function Sidebar() {
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [])
 
-  const fetchUnread = useCallback(async () => {
-    if (!user) return
-    try {
-      const data = await request('/api/notifications/unread-count')
-      setUnreadCount(Number(data?.count || 0))
-    } catch {
-      setUnreadCount(0)
-    }
-  }, [user, request])
-
-  useEffect(() => {
-    if (!user) return
-    fetchUnread()
-    const interval = setInterval(fetchUnread, 30000)
-    const handleNotificationsUpdated = () => {
-      fetchUnread()
-    }
-    window.addEventListener('notifications-updated', handleNotificationsUpdated)
-    return () => {
-      clearInterval(interval)
-      window.removeEventListener('notifications-updated', handleNotificationsUpdated)
-    }
-  }, [user, fetchUnread])
+  const { theme, setTheme } = useTheme()
+  const pathname = usePathname()
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -142,7 +118,7 @@ export function Sidebar() {
   const isLightMode = mounted && theme === 'light'
 
   return (
-    <aside className="w-64 bg-sidebar border-r border-sidebar-border min-h-screen flex flex-col">
+    <aside className="no-print w-64 bg-sidebar border-r border-sidebar-border min-h-screen flex flex-col">
 
       <div className="p-6 border-b border-sidebar-border flex flex-col items-center">
         <img

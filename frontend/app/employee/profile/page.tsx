@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 import { useApi } from '@/hooks/useApi'
 import { Button } from '@/components/ui/button'
@@ -25,6 +24,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnalyzeLoaderFancy } from '@/components/AnalyzeLoaderFancy'
 import { Pencil } from 'lucide-react'
+import { parseApiError, validatePhotoFile, validateProfileForm } from '@/lib/validation'
 
 interface AnalysisRecord {
   id: string
@@ -92,6 +92,14 @@ export default function ProfilePage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const photoError = validatePhotoFile(file)
+    if (photoError) {
+      setEditError(photoError)
+      return
+    }
+
+    setEditError(null)
     setEditPhoto(file)
     const reader = new FileReader()
     reader.onloadend = () => {
@@ -103,31 +111,16 @@ export default function ProfilePage() {
   const handleEditProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setEditError(null)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/
-
-    if (!editUsername.trim() || !nameRegex.test(editUsername.trim())) {
-      setEditError('El nombre de usuario solo puede contener letras')
-      return
-    }
-    if (!editFirstName.trim() || !nameRegex.test(editFirstName.trim())) {
-      setEditError('El nombre solo puede contener letras')
-      return
-    }
-    if (!editLastName.trim() || !nameRegex.test(editLastName.trim())) {
-      setEditError('El apellido solo puede contener letras')
-      return
-    }
-    if (!editEmail.trim() || !emailRegex.test(editEmail.trim())) {
-      setEditError('El correo no tiene un formato válido')
-      return
-    }
-    if (editPhone && (!/^\d+$/.test(editPhone) || editPhone.length > 11)) {
-      setEditError('El teléfono debe tener solo números y máximo 11 dígitos')
-      return
-    }
-    if (editCedula && (!/^\d+$/.test(editCedula) || editCedula.length < 7 || editCedula.length > 8)) {
-      setEditError('La cédula debe tener solo números y entre 7 y 8 dígitos')
+    const formError = validateProfileForm({
+      username: editUsername,
+      email: editEmail,
+      firstName: editFirstName,
+      lastName: editLastName,
+      cedula: editCedula,
+      phone: editPhone,
+    })
+    if (formError) {
+      setEditError(formError)
       return
     }
     setSavingProfile(true)
@@ -152,7 +145,7 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.detail || data.message || 'No se pudo actualizar el perfil')
+        throw new Error(parseApiError(data))
       }
 
       await refreshUser()
@@ -255,11 +248,9 @@ export default function ProfilePage() {
                     }}
                     aria-label="Editar perfil"
                   >
-                    <Image
+                    <img
                       src={user.profilePicture}
                       alt={user.username}
-                      width={128}
-                      height={128}
                       className="w-32 h-32 rounded-2xl object-cover border border-border shadow"
                     />
                     <Button
@@ -388,7 +379,7 @@ export default function ProfilePage() {
                 />
                 <Input
                   type="text"
-                  placeholder="Reseñas min"
+                  placeholder="Mín. reseñas"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={reviewsMin}
@@ -401,7 +392,7 @@ export default function ProfilePage() {
                 />
                 <Input
                   type="text"
-                  placeholder="Reseñas max"
+                  placeholder="Máx. reseñas"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={reviewsMax}
@@ -432,8 +423,8 @@ export default function ProfilePage() {
                   <TableHead className="w-24">Tipo</TableHead>
                   <TableHead className="w-48">Producto 1</TableHead>
                   <TableHead className="w-48">Producto 2</TableHead>
-                  <TableHead className="w-20">Rating 1</TableHead>
-                  <TableHead className="w-20">Rating 2</TableHead>
+                  <TableHead className="w-20">Valoración 1</TableHead>
+                  <TableHead className="w-20">Valoración 2</TableHead>
                   <TableHead className="w-20">Reseñas</TableHead>
                   <TableHead className="w-28">Fecha</TableHead>
                   <TableHead className="w-28">Acción</TableHead>
@@ -556,7 +547,7 @@ export default function ProfilePage() {
                   {editPhotoPreview ? (
                     <img
                       src={editPhotoPreview}
-                      alt="Preview"
+                      alt="Vista previa"
                       className="h-20 w-20 rounded-lg object-cover "
                     />
                   ) : (
@@ -569,7 +560,7 @@ export default function ProfilePage() {
                   type="file"
                   ref={fileInputRef}
                   onChange={handlePhotoChange}
-                  accept="image/*"
+                  accept="image/jpeg,image/png,.jpg,.jpeg,.png"
                   hidden
                 />
                 {/* <span className="text-xs text-muted-foreground">Haz click en la foto para cambiarla</span> */}
@@ -601,7 +592,7 @@ export default function ProfilePage() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   onChange={(e) => setEditCedula(e.target.value.replace(/\D/g, ''))}
-                  maxLength={8}
+                  maxLength={9}
                 />
               </div>
               <div>

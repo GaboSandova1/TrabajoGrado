@@ -82,7 +82,7 @@ export default function EmployeeTasksPage() {
       setTasks(data)
       setError(null)
     } catch (err: any) {
-      setError(err.message || 'Error cargando tareas')
+      setError(err.message || 'Error al cargar las tareas')
     } finally {
       setLoading(false)
     }
@@ -219,7 +219,7 @@ export default function EmployeeTasksPage() {
                                 </SelectGroup>
                                 <SelectSeparator />
                                 <SelectGroup>
-                                  <SelectLabel>Activo</SelectLabel>
+                                  <SelectLabel>En curso</SelectLabel>
                                   <SelectItem value="in_progress">
                                     <span
                                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusClasses(

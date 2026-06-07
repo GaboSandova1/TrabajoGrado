@@ -31,6 +31,33 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+def create_password_reset_token(user_id: int, email: str) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES)
+    payload = {
+        "sub": email,
+        "uid": str(user_id),
+        "type": "password_reset",
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_password_reset_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de recuperación es inválido o ha expirado.",
+        ) from exc
+    if payload.get("type") != "password_reset":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El enlace de recuperación es inválido o ha expirado.",
+        )
+    return payload
+
+
 def authenticate_user(session: Session, username: str, password: str) -> models.User | None:
     user = session.exec(
         select(models.User).where(
@@ -43,17 +70,9 @@ def authenticate_user(session: Session, username: str, password: str) -> models.
 
 
 def serialize_user(user: models.User) -> dict:
-    parts = (user.full_name or "").split(" ", 1)
-    return {
-        "id": str(user.id),
-        "username": user.username,
-        "email": user.email,
-        "role": user.role,
-        "firstName": parts[0] if parts else "",
-        "lastName": parts[1] if len(parts) > 1 else "",
-        "profilePicture": None,
-        "isActive": user.is_active,
-    }
+    from app.serializers import serialize_auth_user
+
+    return serialize_auth_user(user)
 
 
 async def get_current_user(
@@ -81,7 +100,10 @@ async def get_current_user(
 
 def get_current_active_user(current_user: models.User = Depends(get_current_user)) -> models.User:
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta ha sido desactivada. Contacta al gerente para más información.",
+        )
     return current_user
 
 

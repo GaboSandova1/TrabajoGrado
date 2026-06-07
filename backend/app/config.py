@@ -10,10 +10,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "cambia-esto-por-una-clave-aleatoria"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
 
     DATABASE_URL: str = "sqlite:///./database.db"
 
     RAINFOREST_API_KEY: str = ""
+    RAINFOREST_API_KEY_2: str = ""
+    RAINFOREST_API_KEY_3: str = ""
     RAINFOREST_ENDPOINT: str = "https://api.rainforestapi.com/request"
 
     GROQ_API_KEY: str = ""
@@ -40,6 +43,19 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def rainforest_api_keys(self) -> list[str]:
+        keys: list[str] = []
+        for value in (
+            self.RAINFOREST_API_KEY,
+            self.RAINFOREST_API_KEY_2,
+            self.RAINFOREST_API_KEY_3,
+        ):
+            key = (value or "").strip()
+            if key and key not in keys:
+                keys.append(key)
+        return keys
 
     @property
     def smtp_host(self) -> str:
