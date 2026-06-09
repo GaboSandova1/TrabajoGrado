@@ -7,7 +7,8 @@ from app.db import get_session
 router = APIRouter()
 
 
-def _serialize_history(record: models.ProductHistory) -> dict:
+def _serialize_history(record: models.ProductHistory, session: Session) -> dict:
+    user = session.get(models.User, record.user_id) if record.user_id else None
     return {
         "id": str(record.id),
         "type": record.action_type,
@@ -21,6 +22,11 @@ def _serialize_history(record: models.ProductHistory) -> dict:
         "rating2": record.rating_2,
         "reviewCount": record.review_count_requested,
         "recommendation": record.recommendation,
+        "user": {
+            "id": str(user.id) if user else None,
+            "username": user.username if user else "N/D",
+            "email": user.email if user else "-",
+        },
     }
 
 
@@ -33,7 +39,7 @@ def history_me(
         select(models.ProductHistory).where(models.ProductHistory.user_id == user.id)
     ).all()
     records.sort(key=lambda item: item.created_at, reverse=True)
-    return {"items": [_serialize_history(record) for record in records[:300]]}
+    return {"items": [_serialize_history(record, session) for record in records[:300]]}
 
 
 @router.get("/history")
@@ -43,4 +49,4 @@ def history_all(
 ):
     records = session.exec(select(models.ProductHistory)).all()
     records.sort(key=lambda item: item.created_at, reverse=True)
-    return {"items": [_serialize_history(record) for record in records[:300]]}
+    return {"items": [_serialize_history(record, session) for record in records[:300]]}
