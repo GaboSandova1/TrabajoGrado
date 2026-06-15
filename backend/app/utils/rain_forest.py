@@ -1,161 +1,212 @@
 import logging
-
+import re
 import httpx
-
 from app.config import settings
 from app.utils.amazon import extract_asin, extract_amazon_domain
-from app.utils.rainforest_keys import is_quota_exhausted, key_rotator, should_try_next_key
 
 logger = logging.getLogger(__name__)
 
 
-def _clean_review_text(text: str) -> str:
+def _clean_text(text: str) -> str:
     return " ".join((text or "").split())
-
-
-def _normalize_review(review: dict) -> dict:
-    profile = review.get("profile") or {}
-    date_info = review.get("date") or {}
-    rating = review.get("rating")
-    if rating is not None:
-        try:
-            rating = str(float(rating))
-        except (TypeError, ValueError):
-            rating = str(rating)
-    return {
-        "author": profile.get("name") or "",
-        "rating": rating or "",
-        "title": review.get("title") or "",
-        "date": date_info.get("raw") or date_info.get("utc") or "",
-        "body": _clean_review_text(review.get("body") or ""),
-        "verified_purchase": bool(review.get("verified_purchase")),
-    }
 
 
 def _normalize_rating(value) -> float | None:
     if value is None:
         return None
     try:
-        rating = float(value)
-    except (TypeError, ValueError):
+        # Maneja "4,5 von 5" y "4.5 out of 5"
+        clean = str(value).replace(",", ".").strip()
+        rating = float(re.search(r"[\d.]+", clean).group())
+    except (TypeError, ValueError, AttributeError):
         return None
     if rating > 5:
         rating = rating / 2
     return round(max(0.0, min(5.0, rating)), 1)
 
 
-def _parse_product_payload(payload: dict, product_url: str, asin: str, max_reviews: int) -> dict:
-    product = payload.get("product") or {}
-    raw_reviews = product.get("top_reviews") or payload.get("top_reviews") or []
-    reviews = [
-        _normalize_review(review)
-        for review in raw_reviews[:max_reviews]
-        if isinstance(review, dict)
-    ]
+def _build_amazon_reviews_url(asin: str, amazon_domain: str) -> str:
+    return (
+        f"https://www.{amazon_domain}/product-reviews/{asin}"
+        f"?reviewerType=all_reviews&sortBy=recent&pageSize=50"
+    )
 
-    feature_bullets = product.get("feature_bullets") or []
-    if isinstance(feature_bullets, list):
-        description = " ".join(str(item).strip() for item in feature_bullets if str(item).strip())
-    else:
-        description = str(feature_bullets or "")
 
-    if not description:
-        description = product.get("description") or product.get("customers_say") or ""
+def _build_amazon_product_url(asin: str, amazon_domain: str) -> str:
+    return f"https://www.{amazon_domain}/dp/{asin}"
 
+
+def _fetch_html(url: str, country_code: str = "us") -> str:
+    if not settings.SCRAPERAPI_KEY:
+        raise ValueError(
+            "No hay API key de ScraperAPI configurada. "
+            "Agrega SCRAPERAPI_KEY en el .env."
+        )
+    params = {
+        "api_key": settings.SCRAPERAPI_KEY,
+        "url": url,
+        "render": "false",
+        "country_code": country_code,
+    }
+    response = httpx.get(
+        "https://api.scraperapi.com/",
+        params=params,
+        timeout=90.0,
+    )
+    if response.status_code != 200:
+        raise ValueError(f"ScraperAPI error: {response.status_code}")
+    return response.text
+
+
+def _domain_to_country(amazon_domain: str) -> str:
+    mapping = {
+        "amazon.es": "es",
+        "amazon.co.uk": "uk",
+        "amazon.de": "de",
+        "amazon.fr": "fr",
+        "amazon.it": "it",
+        "amazon.com.mx": "mx",
+        "amazon.ca": "ca",
+        "amazon.com": "us",
+    }
+    return mapping.get(amazon_domain, "us")
+
+
+def _parse_product_html(html: str, product_url: str, asin: str) -> dict:
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Título
+    title_tag = soup.find(id="productTitle")
+    title = _clean_text(title_tag.get_text()) if title_tag else "Producto sin título"
+
+    # Rating global
+    rating_tag = soup.find("span", {"data-hook": "rating-out-of-text"})
+    if not rating_tag:
+        rating_tag = soup.find("span", class_="a-icon-alt")
+    rating_raw = rating_tag.get_text() if rating_tag else None
+    rating = _normalize_rating(rating_raw)
+
+    # Imagen
+    img_tag = soup.find("img", id="landingImage")
+    if not img_tag:
+        img_tag = soup.find("img", id="imgBlkFront")
     image_url = ""
-    main_image = product.get("main_image") or {}
-    if isinstance(main_image, dict):
-        image_url = main_image.get("link") or ""
+    if img_tag:
+        image_url = img_tag.get("src") or img_tag.get("data-src") or ""
+        # Intentar obtener imagen de mayor resolución
+        data_dynamic = img_tag.get("data-a-dynamic-image", "")
+        if data_dynamic:
+            urls = re.findall(r'"(https://[^"]+\.jpg)"', data_dynamic)
+            if urls:
+                image_url = urls[0]
 
-    price = ""
-    buybox = product.get("buybox_winner") or {}
-    if isinstance(buybox, dict):
-        price_info = buybox.get("price") or {}
-        if isinstance(price_info, dict):
-            price = price_info.get("raw") or str(price_info.get("value") or "")
+    # Precio
+    price_tag = soup.find("span", class_="a-price-whole")
+    price = _clean_text(price_tag.get_text()) if price_tag else ""
+
+    # Descripción: feature bullets
+    bullets_div = soup.find(id="feature-bullets")
+    description = ""
+    if bullets_div:
+        items = bullets_div.find_all("span", class_="a-list-item")
+        description = " ".join(
+            _clean_text(i.get_text())
+            for i in items
+            if _clean_text(i.get_text())
+        )
 
     return {
         "asin": asin,
-        "product_url": product.get("link") or product_url,
-        "product_title": product.get("title") or "Producto sin título",
+        "product_url": product_url,
+        "product_title": title,
         "price": price,
         "image_url": image_url,
         "description": description,
-        "reviews": reviews,
-        "count": len(reviews),
-        "rating": _normalize_rating(product.get("rating")),
+        "rating": rating,
         "amazon_domain": extract_amazon_domain(product_url),
     }
 
 
-def _fetch_with_key(
-    product_url: str,
-    max_reviews: int,
-    asin: str,
-    amazon_domain: str,
-    api_key: str,
-) -> dict:
-    params = {
-        "api_key": api_key,
-        "type": "product",
-        "amazon_domain": amazon_domain,
-        "asin": asin,
-    }
+def _parse_reviews_html(html: str, max_reviews: int) -> list:
+    from bs4 import BeautifulSoup
 
-    response = httpx.get(settings.RAINFOREST_ENDPOINT, params=params, timeout=60.0)
-    response.raise_for_status()
-    payload = response.json()
-    return _parse_product_payload(payload, product_url, asin, max_reviews)
+    soup = BeautifulSoup(html, "html.parser")
+    reviews = []
+
+    # Cada review tiene data-hook="review"
+    review_tags = soup.find_all("div", {"data-hook": "review"})
+    logger.info("Reviews encontradas en HTML: %d", len(review_tags))
+
+    for tag in review_tags[:max_reviews]:
+        # Rating
+        rating_tag = tag.find("span", class_="a-icon-alt")
+        rating_raw = rating_tag.get_text() if rating_tag else ""
+        rating = _normalize_rating(rating_raw) or ""
+
+        # Título
+        title_tag = tag.find("a", {"data-hook": "review-title"})
+        if not title_tag:
+            title_tag = tag.find("span", {"data-hook": "review-title"})
+        title = _clean_text(title_tag.get_text()) if title_tag else ""
+
+        # Cuerpo
+        body_tag = tag.find("span", {"data-hook": "review-body"})
+        body = _clean_text(body_tag.get_text()) if body_tag else ""
+
+        # Fecha
+        date_tag = tag.find("span", {"data-hook": "review-date"})
+        date = _clean_text(date_tag.get_text()) if date_tag else ""
+
+        # Autor
+        author_tag = tag.find("span", class_="a-profile-name")
+        author = _clean_text(author_tag.get_text()) if author_tag else ""
+
+        # Compra verificada
+        verified_tag = tag.find("span", {"data-hook": "avp-badge"})
+        verified = verified_tag is not None
+
+        if body:
+            reviews.append({
+                "author": author,
+                "rating": str(rating),
+                "title": title,
+                "date": date,
+                "body": body,
+                "verified_purchase": verified,
+            })
+
+    return reviews
 
 
 def fetch_product_payload(product_url: str, max_reviews: int = 10) -> dict:
-    keys_to_try = key_rotator.keys_for_attempt()
-    if not keys_to_try:
-        raise ValueError(
-            "No hay API keys de Rainforest configuradas. "
-            "Agrega RAINFOREST_API_KEY (y opcionalmente _2, _3) en el .env."
-        )
-
     asin = extract_asin(product_url)
     if not asin:
         raise ValueError("No se pudo extraer el ASIN de la URL")
 
     amazon_domain = extract_amazon_domain(product_url)
+    country_code = _domain_to_country(amazon_domain)
     max_reviews = max(1, min(int(max_reviews), 50))
 
-    last_error: Exception | None = None
+    # 1. Datos del producto
+    product_page_url = _build_amazon_product_url(asin, amazon_domain)
+    logger.info("Obteniendo producto: %s", product_page_url)
+    product_html = _fetch_html(product_page_url, country_code)
+    product_data = _parse_product_html(product_html, product_url, asin)
 
-    for index, api_key in enumerate(keys_to_try):
-        try:
-            logger.info(
-                "Rainforest request con clave …%s (%s/%s)",
-                api_key[-4:],
-                index + 1,
-                len(keys_to_try),
-            )
-            return _fetch_with_key(product_url, max_reviews, asin, amazon_domain, api_key)
-        except httpx.HTTPStatusError as exc:
-            last_error = exc
-            response = exc.response
+    # 2. Reviews — con paginación si se necesitan más de 10
+    reviews_page_url = _build_amazon_reviews_url(asin, amazon_domain)
+    logger.info("Obteniendo reviews: %s", reviews_page_url)
+    try:
+        reviews_html = _fetch_html(reviews_page_url, country_code)
+        reviews = _parse_reviews_html(reviews_html, max_reviews)
+        logger.info("Reviews extraídas: %d", len(reviews))
+    except Exception as e:
+        logger.warning("No se pudieron obtener reviews: %s", e)
+        reviews = []
 
-            if should_try_next_key(response) and index < len(keys_to_try) - 1:
-                if is_quota_exhausted(response):
-                    key_rotator.mark_exhausted(api_key)
-                else:
-                    logger.warning(
-                        "Rainforest clave …%s respondió %s, probando siguiente clave.",
-                        api_key[-4:],
-                        response.status_code,
-                    )
-                continue
+    product_data["reviews"] = reviews
+    product_data["count"] = len(reviews)
 
-            response.raise_for_status()
-        except Exception as exc:
-            last_error = exc
-            raise
-
-    raise ValueError(
-        "Todas las API keys de Rainforest están agotadas o fallaron. "
-        "Configura claves adicionales (RAINFOREST_API_KEY_2, RAINFOREST_API_KEY_3) "
-        "o espera la renovación del plan."
-    ) from last_error
+    return product_data
