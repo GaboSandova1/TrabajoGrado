@@ -24,8 +24,10 @@ COMPARE_SYSTEM_PROMPT = (
 
 def _extract_json(text: str) -> dict:
     text = (text or "").strip()
+
     if not text:
         return {}
+
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -35,116 +37,207 @@ def _extract_json(text: str) -> dict:
                 return json.loads(match.group(0))
             except json.JSONDecodeError:
                 return {}
+
     return {}
 
 
-def _chat_completion(system_prompt: str, user_prompt: str, temperature: float = 0.2) -> str:
+def _chat_completion(
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.2
+) -> str:
+
     if not settings.GROQ_API_KEY:
         raise ValueError("Groq API key missing")
+
+    print("\n==============================")
+    print("MODELO:", settings.GROQ_MODEL)
+    print("ENDPOINT:", settings.GROQ_ENDPOINT)
+    print("==============================\n")
 
     headers = {
         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
+
     payload = {
         "model": settings.GROQ_MODEL,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
         ],
         "temperature": temperature,
-        "response_format": {"type": "json_object"},
     }
-    response = httpx.post(settings.GROQ_ENDPOINT, json=payload, headers=headers, timeout=90.0)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+
+    try:
+
+        response = httpx.post(
+            settings.GROQ_ENDPOINT,
+            json=payload,
+            headers=headers,
+            timeout=90.0,
+        )
+
+        print("\n==============================")
+        print("STATUS CODE:")
+        print(response.status_code)
+        print("==============================\n")
+
+        print("\n==============================")
+        print("RESPONSE TEXT:")
+        print(response.text)
+        print("==============================\n")
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        print("\n==============================")
+        print("JSON RESPONSE:")
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        print("==============================\n")
+
+        if "choices" not in data:
+            raise Exception(
+                f"Groq respondió algo inesperado:\n{json.dumps(data, indent=2, ensure_ascii=False)}"
+            )
+
+        return data["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print("\n==============================")
+        print("EXCEPCION:")
+        print(type(e))
+        print(e)
+        print("==============================\n")
+        raise
 
 
-def _build_reviews_context(reviews: list, limit: int = 8) -> str:
+def _build_reviews_context(reviews: list, limit: int = 6) -> str:
     snippets = []
+
     for index, review in enumerate(reviews[:limit]):
         body = (review.get("body") or "").strip()
+
         if not body:
             continue
+
         rating = review.get("rating") or "?"
-        snippets.append(f"Reseña {index + 1} (★{rating}): {body[:400]}")
+
+        snippets.append(
+            f"Reseña {index + 1} (★{rating}): {body[:300]}"
+        )
+
     return "\n".join(snippets)
 
 
 def analyze_product(product: dict, review_count: int) -> dict:
+
     reviews = (product.get("reviews") or [])[:review_count]
+
     user_prompt = (
         f"Producto: {product.get('product_title', '')}\n"
-        f"Descripción: {(product.get('description') or '')[:2000]}\n"
+        f"Descripción: {(product.get('description') or '')[:1000]}\n"
         f"Valoración Amazon: {product.get('rating')}\n"
-        f"Reseñas ({len(reviews)}):\n{_build_reviews_context(reviews)}\n"
+        f"Reseñas ({len(reviews)}):\n"
+        f"{_build_reviews_context(reviews)}\n"
     )
-    raw = _chat_completion(ANALYSIS_SYSTEM_PROMPT, user_prompt)
+
+    print("\n==============================")
+    print("PROMPT ENVIADO A GROQ:")
+    print(user_prompt)
+    print("==============================\n")
+
+    raw = _chat_completion(
+        ANALYSIS_SYSTEM_PROMPT,
+        user_prompt
+    )
+
+    print("\n==============================")
+    print("RESPUESTA CRUDA DE GROQ:")
+    print(raw)
+    print("==============================\n")
+
     parsed = _extract_json(raw)
 
     rating = parsed.get("rating")
+
     if rating is None:
         rating = product.get("rating") or 0
+
     try:
         rating = round(float(rating), 1)
-    except (TypeError, ValueError):
+    except:
         rating = product.get("rating") or 0
 
-    positives = parsed.get("positiveAspects") or []
-    negatives = parsed.get("negativeAspects") or []
-    insights = parsed.get("keyInsights") or []
-
     return {
-        "productName": product.get("product_title") or "",
-        "productUrl": product.get("product_url") or "",
+        "productName": product.get("product_title", ""),
+        "productUrl": product.get("product_url", ""),
         "rating": rating,
         "reviewCount": len(reviews),
-        "summary": parsed.get("summary") or "",
-        "positiveAspects": [str(item) for item in positives][:6],
-        "negativeAspects": [str(item) for item in negatives][:6],
-        "keyInsights": [str(item) for item in insights][:6],
-        "imageUrl": product.get("image_url") or "",
-        "price": product.get("price") or "",
+        "summary": parsed.get("summary", ""),
+        "positiveAspects": parsed.get("positiveAspects", []),
+        "negativeAspects": parsed.get("negativeAspects", []),
+        "keyInsights": parsed.get("keyInsights", []),
+        "imageUrl": product.get("image_url", ""),
+        "price": product.get("price", ""),
     }
 
+def compare_products(
+    product1: dict,
+    product2: dict,
+    analysis1: dict,
+    analysis2: dict,
+) -> dict:
 
-def compare_products(product_a: dict, product_b: dict, analysis_a: dict, analysis_b: dict) -> dict:
-    user_prompt = (
-        f"Producto 1: {analysis_a.get('productName')}\n"
-        f"URL: {analysis_a.get('productUrl')}\n"
-        f"Precio: {product_a.get('price')}\n"
-        f"Imagen: {product_a.get('image_url')}\n"
-        f"Rating: {analysis_a.get('rating')}\n"
-        f"Resumen: {analysis_a.get('summary')}\n"
-        f"Pros: {analysis_a.get('positiveAspects')}\n"
-        f"Contras: {analysis_a.get('negativeAspects')}\n\n"
-        f"Producto 2: {analysis_b.get('productName')}\n"
-        f"URL: {analysis_b.get('productUrl')}\n"
-        f"Precio: {product_b.get('price')}\n"
-        f"Imagen: {product_b.get('image_url')}\n"
-        f"Rating: {analysis_b.get('rating')}\n"
-        f"Resumen: {analysis_b.get('summary')}\n"
-        f"Pros: {analysis_b.get('positiveAspects')}\n"
-        f"Contras: {analysis_b.get('negativeAspects')}\n"
+    user_prompt = f"""
+Producto 1:
+Nombre: {analysis1["productName"]}
+Precio: {analysis1["price"]}
+Rating: {analysis1["rating"]}
+Pros: {", ".join(analysis1["positiveAspects"])}
+Contras: {", ".join(analysis1["negativeAspects"])}
+
+Producto 2:
+Nombre: {analysis2["productName"]}
+Precio: {analysis2["price"]}
+Rating: {analysis2["rating"]}
+Pros: {", ".join(analysis2["positiveAspects"])}
+Contras: {", ".join(analysis2["negativeAspects"])}
+"""
+
+    raw = _chat_completion(
+        COMPARE_SYSTEM_PROMPT,
+        user_prompt
     )
-    raw = _chat_completion(COMPARE_SYSTEM_PROMPT, user_prompt, temperature=0.3)
+
     parsed = _extract_json(raw)
 
-    def _product_block(key: str, fallback_name: str, fallback: dict, source: dict) -> dict:
-        block = parsed.get(key) or {}
-        return {
-            "name": block.get("name") or fallback.get("productName") or fallback_name,
-            "rating": block.get("rating") or fallback.get("rating") or 0,
-            "price": block.get("price") or source.get("price") or "",
-            "pros": block.get("pros") or fallback.get("positiveAspects") or [],
-            "cons": block.get("cons") or fallback.get("negativeAspects") or [],
-            "imageUrl": block.get("imageUrl") or source.get("image_url") or "",
-        }
-
     return {
-        "bestChoice": parsed.get("bestChoice") or analysis_a.get("productName") or "Producto 1",
-        "recommendation": parsed.get("recommendation") or "",
-        "product1": _product_block("product1", "Producto 1", analysis_a, product_a),
-        "product2": _product_block("product2", "Producto 2", analysis_b, product_b),
+        "bestChoice": parsed.get("bestChoice", ""),
+        "recommendation": parsed.get("recommendation", ""),
+
+        "product1": {
+            "name": analysis1["productName"],
+            "rating": analysis1["rating"],
+            "price": analysis1["price"],
+            "pros": analysis1["positiveAspects"],
+            "cons": analysis1["negativeAspects"],
+            "imageUrl": analysis1["imageUrl"],
+        },
+
+        "product2": {
+            "name": analysis2["productName"],
+            "rating": analysis2["rating"],
+            "price": analysis2["price"],
+            "pros": analysis2["positiveAspects"],
+            "cons": analysis2["negativeAspects"],
+            "imageUrl": analysis2["imageUrl"],
+        },
     }

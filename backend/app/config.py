@@ -14,10 +14,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./database.db"
 
-    RAINFOREST_API_KEY: str = ""
-    RAINFOREST_API_KEY_2: str = ""
-    RAINFOREST_API_KEY_3: str = ""
-    SCRAPERAPI_KEY: str = ""
+    # RAINFOREST_API_KEY: str = ""
+    # RAINFOREST_API_KEY_2: str = ""
+    # RAINFOREST_API_KEY_3: str = ""
+    # SCRAPERAPI_KEY: str = ""
+    DECODO_API_KEY: str = ""
     RAINFOREST_ENDPOINT: str = "https://api.rainforestapi.com/request"
 
     GROQ_API_KEY: str = ""

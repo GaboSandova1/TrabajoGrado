@@ -139,9 +139,9 @@ export default function AnalyzePage() {
             <Card>
               <CardHeader>
                 <CardTitle>{result.productName}</CardTitle>
-                <CardDescription>
+                {/* <CardDescription>
                   Análisis basado en {result.reviewCount} reseñas
-                </CardDescription>
+                </CardDescription> */}
               </CardHeader>
               <CardContent className="space-y-8">
                 <div className="bg-primary/10 rounded-lg p-6">

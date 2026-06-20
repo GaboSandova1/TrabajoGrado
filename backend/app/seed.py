@@ -7,18 +7,18 @@ def seed_default_users(session: Session) -> None:
     defaults = [
         {
             "username": "manager",
-            "email": "manager@reviewai.local",
+            "email": "areamedic@gmail.com",
             "password": "manager123",
-            "full_name": "Manager Demo",
+            "full_name": "Gerente",
             "role": "manager",
         },
-        {
-            "username": "employee",
-            "email": "employee@reviewai.local",
-            "password": "employee123",
-            "full_name": "Employee Demo",
-            "role": "employee",
-        },
+        # {
+        #     "username": "employee",
+        #     "email": "employee@reviewai.local",
+        #     "password": "employee123",
+        #     "full_name": "Employee Demo",
+        #     "role": "employee",
+        # },
     ]
 
     for item in defaults:
